@@ -19,28 +19,24 @@ jobs:
         with:
           node-version: 22
 
-      # 3. إعداد بيئة Java 17
+      # 3. إعداد Java 21 (المطلوب لحزم Capacitor الأخير)
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
-      # 4. إعداد وتثبيت أدوات أندرويد SDK
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      # 5. تثبيت حزم المشروع
+      # 4. تثبيت حزم المشروع
       - name: Install Dependencies
         run: |
           npm install --legacy-peer-deps || npm install --force
 
-      # 6. بناء تطبيق الويب عبر Vite
+      # 5. بناء تطبيق الويب عبر Vite
       - name: Build Web Application
         run: |
           npx vite build
 
-      # 7. تهيئة Capacitor وإنشاء مجلد أندرويد نظيف
+      # 6. إعداد وتزامن Capacitor
       - name: Configure Capacitor & Add Android
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
@@ -53,23 +49,18 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      # 8. قبول جميع تراخيص Android SDK تلقائياً
-      - name: Accept Android SDK Licenses
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      # 9. إعطاء صلاحية التشغيل لملف Gradle
+      # 7. إعطاء صلاحيات التشغيل
       - name: Grant Executable Permission
         run: |
           chmod +x android/gradlew
 
-      # 10. بناء ملف الـ APK
+      # 8. بناء ملف الـ APK
       - name: Build Debug APK
         run: |
           cd android
           ./gradlew assembleDebug --no-daemon
 
-      # 11. رفع ملف الـ APK الناتجة للتحميل
+      # 9. رفع الملف للتحميل
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
