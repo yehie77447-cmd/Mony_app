@@ -1,51 +1,95 @@
-import Dexie from 'dexie';
+const DB_NAME = 'MonyAppDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'articles';
 
-export const db = new Dexie('MonyAppDB');
-
-// دعم كافة تصنيفات المحتوى والمصادر والوسائط
-db.version(2).stores({
-  articles: '++id, title, type, platform, category, isSaved, createdAt',
-  transactions: '++id, type, amount, note, date'
-});
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
 
 export const StorageModule = {
-  // جلب العناصر
+  // جلب كافة المحتويات
   async getAllArticles() {
     try {
-      return await db.articles.orderBy('id').reverse().toArray();
-    } catch (error) {
-      console.error('Error fetching content:', error);
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.getAll();
+        req.onsuccess = () => {
+          const res = req.result || [];
+          res.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+          resolve(res);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      console.error('DB Error:', e);
       return [];
     }
   },
 
-  // حفظ عنصر جديد متعدد الوسائط
-  async saveArticle(itemData) {
-    return await db.articles.add({
-      title: itemData.title || 'بدون عنوان',
-      summary: itemData.summary || '',
-      content: itemData.content || '',
-      type: itemData.type || 'article', // 'article' | 'video' | 'audio' | 'social'
-      platform: itemData.platform || 'web', // 'youtube' | 'x' | 'facebook' | 'instagram' | 'tiktok' | 'rss'
-      mediaUrl: itemData.mediaUrl || '',
-      author: itemData.author || '',
-      thumbnail: itemData.thumbnail || '',
-      category: itemData.category || 'عام',
-      isSaved: itemData.isSaved ?? true,
-      createdAt: itemData.createdAt || new Date().toISOString()
-    });
+  // جلب عنصر محدد برقمه (حل مشكلة getArticle)
+  async getArticle(id) {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get(Number(id));
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      console.error('getArticle Error:', e);
+      return null;
+    }
+  },
+
+  // حفظ عنصر جديد مع تراكم المحتوى القديم
+  async saveArticle(article) {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const itemToSave = {
+          ...article,
+          createdAt: article.createdAt || new Date().toISOString()
+        };
+        const req = store.add(itemToSave);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      console.error('saveArticle Error:', e);
+    }
   },
 
   // حذف عنصر
   async deleteArticle(id) {
-    return await db.articles.delete(id);
-  },
-
-  // جلب المحفوظات
-  async getSavedArticles() {
-    return await db.articles.filter(item => item.isSaved === true).toArray();
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(Number(id));
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      console.error('deleteArticle Error:', e);
+    }
   }
 };
 
 export default StorageModule;
-
