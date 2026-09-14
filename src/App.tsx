@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { LanguageProvider, useLanguage } from '@/i18n/LanguageContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { ToastProvider } from '@/context/ToastContext';
@@ -8,6 +8,25 @@ import { FeedView } from '@/components/FeedView';
 import { ArticleDetailView } from '@/components/ArticleDetailView';
 import { AddContentView } from '@/components/AddContentView';
 import { SettingsView } from '@/components/SettingsView';
+
+// صائد الأخطاء التشغيلية
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: string }> {
+  state = { hasError: false, error: '' };
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 bg-slate-900 text-red-400 min-h-screen text-center dir-rtl">
+          <h2 className="text-xl font-bold mb-2">حدث خطأ أثناء تشغيل التطبيق</h2>
+          <p className="text-sm bg-slate-800 p-3 rounded border border-red-500/30">{this.state.error}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function AppContent() {
   const { t } = useLanguage();
@@ -22,39 +41,20 @@ function AppContent() {
     ? t.navSaved
     : t.appName;
 
-  const handleOpenArticle = (id: number) => {
-    setOpenArticleId(id);
-  };
-
-  const handleCloseArticle = () => {
-    setOpenArticleId(null);
-  };
-
-  const handleNavigate = (newView: View) => {
-    setOpenArticleId(null);
-    setView(newView);
-  };
-
-  // Scroll to top on view change
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [view, openArticleId]);
 
   return (
-    <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
+    <div className="min-h-screen bg-surface-50 dark:bg-surface-950 text-slate-100">
       <TopBar title={topBarTitle} />
 
-      <main>
+      <main className="pb-20">
         {openArticleId !== null ? (
-          <ArticleDetailView articleId={openArticleId} onBack={handleCloseArticle} />
-        ) : view === 'feed' ? (
+          <ArticleDetailView articleId={openArticleId} onBack={() => setOpenArticleId(null)} />
+        ) : view === 'feed' || view === 'saved' ? (
           <FeedView
-            onOpenArticle={handleOpenArticle}
-            onAddContent={() => setView('add')}
-          />
-        ) : view === 'saved' ? (
-          <FeedView
-            onOpenArticle={handleOpenArticle}
+            onOpenArticle={(id) => setOpenArticleId(id)}
             onAddContent={() => setView('add')}
           />
         ) : view === 'add' ? (
@@ -67,19 +67,21 @@ function AppContent() {
         ) : null}
       </main>
 
-      {openArticleId === null && <BottomNav current={view} onNavigate={handleNavigate} />}
+      {openArticleId === null && <BottomNav current={view} onNavigate={(v) => { setOpenArticleId(null); setView(v); }} />}
     </div>
   );
 }
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <LanguageProvider>
-        <ToastProvider>
-          <AppContent />
-        </ToastProvider>
-      </LanguageProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <LanguageProvider>
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
+        </LanguageProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
