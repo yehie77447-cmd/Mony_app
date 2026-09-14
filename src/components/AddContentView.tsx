@@ -1,153 +1,92 @@
-import { useState } from 'react';
-import { Link, Loader2, Sparkles, ArrowLeft } from 'lucide-react';
-import { FetcherModule } from '@/modules/FetcherModule';
-import { AiModule } from '@/modules/AiModule';
-import { StorageModule } from '@/modules/StorageModule';
+import React, { useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
-import { useToast } from '@/context/ToastContext';
+import { StorageModule } from '@/modules/StorageModule';
+import { ExtractorModule } from '@/modules/ExtractorModule';
 
-interface Props {
+interface AddContentViewProps {
   onDone: () => void;
   onBack: () => void;
 }
 
-export function AddContentView({ onDone, onBack }: Props) {
+export function AddContentView({ onDone, onBack }: AddContentViewProps) {
   const { t } = useLanguage();
-  const toast = useToast();
-  const [url, setUrl] = useState('');
+  const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleFetch = async () => {
-    if (!url.trim()) {
-      setError(t.fetchError);
-      return;
-    }
+    if (!input.trim()) return;
 
     setLoading(true);
     setError('');
 
     try {
-      const fetched = await FetcherModule.fetch(url);
-      const { summary, tags } = AiModule.process(fetched.content, fetched.title);
+      if (ExtractorModule.isUrl(input.trim())) {
+        // جلب واستخراج المحتوى والوسائط من الرابط المباشر
+        const extractedData = await ExtractorModule.extractFromUrl(input.trim());
+        await StorageModule.saveArticle({
+          ...extractedData,
+          category: 'مجلوب',
+          isSaved: true,
+        });
+      } else {
+        // البحث والنقب عن المحتوى عن طريق نص البحث
+        const results = await ExtractorModule.searchByText(input.trim());
+        for (const item of results) {
+          await StorageModule.saveArticle({
+            ...item,
+            category: input.trim(),
+            isSaved: true,
+          });
+        }
+      }
 
-      const article = {
-        url: fetched.url,
-        title: fetched.title,
-        content: fetched.content,
-        summary,
-        tags,
-        source: fetched.source,
-        sourceName: fetched.sourceName,
-        author: fetched.author,
-        thumbnail: fetched.thumbnail,
-        publishedAt: fetched.publishedAt,
-        fetchedAt: new Date().toISOString(),
-        isDownloaded: false,
-        notes: [],
-        readProgress: 0,
-        isRead: false,
-      };
-
-      await StorageModule.addArticle(article);
-      toast.show(t.fetchSuccess);
-      setUrl('');
-      onDone();
-    } catch {
-      setError(t.fetchError);
-      toast.show(t.fetchError, 'error');
+      setInput('');
+      onDone(); // العودة للرئيسية وعرض العناصر المجلوبة
+    } catch (err: any) {
+      setError(err.message || 'تعذر جلب البيانات، يرجى التأكد من الرابط أو نص البحث');
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      setUrl(text.trim());
-    } catch {
-      // clipboard not available
-    }
-  };
-
   return (
-    <div className="max-w-2xl mx-auto px-4 pt-4 pb-24 animate-fade-in">
-      <button onClick={onBack} className="btn-ghost mb-4 -ml-2 rtl:-mr-2">
-        <ArrowLeft className="w-4 h-4 rtl:rotate-180" />
-        {t.backToFeed}
+    <div className="p-4 max-w-2xl mx-auto dir-rtl">
+      <button 
+        onClick={onBack}
+        className="mb-4 text-sm text-sky-400 hover:underline flex items-center gap-1"
+      >
+        ← العودة للرئيسية
       </button>
 
-      <div className="card p-6">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/40 flex items-center justify-center">
-            <Link className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-surface-900 dark:text-surface-50">{t.addContentTitle}</h2>
-          </div>
-        </div>
-        <p className="text-sm text-surface-500 dark:text-surface-400 mb-4 leading-relaxed">{t.addContentHint}</p>
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <h2 className="text-xl font-bold mb-2 text-white">إضافة محتوى / بحث شامل</h2>
+        <p className="text-slate-400 text-sm mb-6">
+          الصق رابط (يوتيوب، إكس/تويتر، تيك توك، فيسبوك، أو مقال) أو اكتب نص البحث لجلب المحتوى والوسائط تلقائياً.
+        </p>
 
-        <div className="relative mb-3">
+        <div className="space-y-4">
           <input
             type="text"
-            value={url}
-            onChange={(e) => { setUrl(e.target.value); setError(''); }}
-            placeholder={t.urlPlaceholder}
-            className="input pr-20"
-            onKeyDown={(e) => e.key === 'Enter' && !loading && handleFetch()}
-            disabled={loading}
-            autoFocus
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="اكتب كلمة البحث أو الصق رابط الوسائط..."
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
           />
-          <button
-            onClick={handlePaste}
-            className="absolute top-1/2 -translate-y-1/2 right-2 rtl:left-2 rtl:right-auto text-xs text-primary-500 hover:text-primary-600 font-semibold px-2 py-1 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/30"
-          >
-            Paste
-          </button>
-        </div>
 
-        {error && (
-          <div className="mb-3 p-3 rounded-xl bg-error-50 dark:bg-error-900/20 border border-error-200 dark:border-error-800 text-sm text-error-700 dark:text-error-400 animate-slide-down">
-            {error}
-          </div>
-        )}
-
-        <button
-          onClick={handleFetch}
-          disabled={loading || !url.trim()}
-          className="btn-primary w-full"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              {t.fetching}
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4" />
-              {t.fetchContent}
-            </>
+          {error && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+              {error}
+            </div>
           )}
-        </button>
 
-        {/* Quick examples */}
-        <div className="mt-4 pt-4 border-t border-surface-100 dark:border-surface-800">
-          <p className="text-xs text-surface-400 dark:text-surface-500 mb-2 font-medium">Quick examples:</p>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { label: 'Wikipedia Article', url: 'https://en.wikipedia.org/wiki/Web_browser' },
-              { label: 'YouTube Video', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
-            ].map((ex) => (
-              <button
-                key={ex.url}
-                onClick={() => setUrl(ex.url)}
-                className="tag"
-              >
-                {ex.label}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={handleFetch}
+            disabled={loading}
+            className="w-full bg-sky-500 hover:bg-sky-600 disabled:bg-slate-700 text-white font-medium py-3 rounded-xl transition flex items-center justify-center gap-2"
+          >
+            {loading ? 'جاري الاستخراج والجلب...' : 'استخراج وجلب المحتوى'}
+          </button>
         </div>
       </div>
     </div>
