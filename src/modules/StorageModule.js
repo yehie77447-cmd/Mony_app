@@ -1,33 +1,49 @@
 import Dexie from 'dexie';
 
-// 1. إنشاء قاعدة البيانات المحلية وتسميتها
-export const db = new Dexie('AppLocalDB');
+// إنشاء قاعدة البيانات المحلية
+export const db = new Dexie('MonyAppDB');
 
-// 2. تحديد الجداول والوسوم لحفظ البيانات بدون إنترنت
 db.version(1).stores({
-  transactions: '++id, type, amount, note, date, isOffline',
-  notes: '++id, title, content, date'
+  articles: '++id, title, summary, content, category, isSaved, createdAt',
+  transactions: '++id, type, amount, note, date'
 });
 
-// 3. الوظائف البرمجية لإدارة البيانات
 export const StorageModule = {
-  // إضافة معاملة جديدة (مصروف، دين، أو قيد)
-  async addTransaction(data) {
-    return await db.transactions.add({
-      ...data,
-      date: data.date || new Date().toISOString(),
-      isOffline: true
+  // جلب كافة المقالات (الدالة التي كانت مفقودة وتسببت بالخطأ)
+  async getAllArticles() {
+    try {
+      const articles = await db.articles.toArray();
+      return articles;
+    } catch (error) {
+      console.error('Error fetching articles:', error);
+      return [];
+    }
+  },
+
+  // دالة بديلة لنفس الغرض
+  async getArticles() {
+    return await this.getAllArticles();
+  },
+
+  // حفظ مقال أو عنصر جديد
+  async saveArticle(articleData) {
+    return await db.articles.add({
+      ...articleData,
+      createdAt: articleData.createdAt || new Date().toISOString(),
+      isSaved: articleData.isSaved ?? true
     });
   },
 
-  // جلب كافة المعاملات المحفوظة على الهاتف
-  async getTransactions() {
-    return await db.transactions.toArray();
+  // حذف مقال
+  async deleteArticle(id) {
+    return await db.articles.delete(id);
   },
 
-  // حذف معاملة بواسطة الـ ID
-  async deleteTransaction(id) {
-    return await db.transactions.delete(id);
+  // جلب العناصر المحفوظة فقط
+  async getSavedArticles() {
+    return await db.articles.filter(item => item.isSaved === true).toArray();
   }
 };
+
+export default StorageModule;
 
