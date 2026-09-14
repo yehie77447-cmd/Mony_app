@@ -1,45 +1,47 @@
 import Dexie from 'dexie';
 
-// إنشاء قاعدة البيانات المحلية
 export const db = new Dexie('MonyAppDB');
 
-db.version(1).stores({
-  articles: '++id, title, summary, content, category, isSaved, createdAt',
+// دعم كافة تصنيفات المحتوى والمصادر والوسائط
+db.version(2).stores({
+  articles: '++id, title, type, platform, category, isSaved, createdAt',
   transactions: '++id, type, amount, note, date'
 });
 
 export const StorageModule = {
-  // جلب كافة المقالات (الدالة التي كانت مفقودة وتسببت بالخطأ)
+  // جلب العناصر
   async getAllArticles() {
     try {
-      const articles = await db.articles.toArray();
-      return articles;
+      return await db.articles.orderBy('id').reverse().toArray();
     } catch (error) {
-      console.error('Error fetching articles:', error);
+      console.error('Error fetching content:', error);
       return [];
     }
   },
 
-  // دالة بديلة لنفس الغرض
-  async getArticles() {
-    return await this.getAllArticles();
-  },
-
-  // حفظ مقال أو عنصر جديد
-  async saveArticle(articleData) {
+  // حفظ عنصر جديد متعدد الوسائط
+  async saveArticle(itemData) {
     return await db.articles.add({
-      ...articleData,
-      createdAt: articleData.createdAt || new Date().toISOString(),
-      isSaved: articleData.isSaved ?? true
+      title: itemData.title || 'بدون عنوان',
+      summary: itemData.summary || '',
+      content: itemData.content || '',
+      type: itemData.type || 'article', // 'article' | 'video' | 'audio' | 'social'
+      platform: itemData.platform || 'web', // 'youtube' | 'x' | 'facebook' | 'instagram' | 'tiktok' | 'rss'
+      mediaUrl: itemData.mediaUrl || '',
+      author: itemData.author || '',
+      thumbnail: itemData.thumbnail || '',
+      category: itemData.category || 'عام',
+      isSaved: itemData.isSaved ?? true,
+      createdAt: itemData.createdAt || new Date().toISOString()
     });
   },
 
-  // حذف مقال
+  // حذف عنصر
   async deleteArticle(id) {
     return await db.articles.delete(id);
   },
 
-  // جلب العناصر المحفوظة فقط
+  // جلب المحفوظات
   async getSavedArticles() {
     return await db.articles.filter(item => item.isSaved === true).toArray();
   }
