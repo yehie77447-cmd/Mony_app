@@ -1,5 +1,4 @@
 export const ExtractorModule = {
-  // فحص هل المدخل رابط أم نص بحث
   isUrl(str) {
     try {
       new URL(str);
@@ -9,7 +8,6 @@ export const ExtractorModule = {
     }
   },
 
-  // تحديد المنصة المجلوب منها الرابط
   detectPlatform(url) {
     const lower = url.toLowerCase();
     if (lower.includes('youtube.com') || lower.includes('youtu.be')) return 'youtube';
@@ -20,17 +18,14 @@ export const ExtractorModule = {
     return 'web';
   },
 
-  // استخراج معرّف فيديو اليوتيوب
   getYouTubeId(url) {
     const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
     return (match && match[2].length === 11) ? match[2] : '';
   },
 
-  // جلب وتفكيك المحتوى من رابط
   async extractFromUrl(url) {
     const platform = this.detectPlatform(url);
 
-    // 1. معالجة روابط يوتيوب وتضمين المشغل تلقائياً
     if (platform === 'youtube') {
       const videoId = this.getYouTubeId(url);
       try {
@@ -53,7 +48,6 @@ export const ExtractorModule = {
       }
     }
 
-    // 2. معالجة منصات السوشيال ميديا الأخرى عبر محركات oEmbed المفتوحة
     try {
       const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
       if (res.ok) {
@@ -63,7 +57,7 @@ export const ExtractorModule = {
             title: data.title || `محتوى من ${platform}`,
             summary: data.author_name ? `منشور بواسطة ${data.author_name}` : 'منشور وسائط متعددة',
             content: data.html || `<p><a href="${url}" target="_blank" rel="noopener">فتح المنشور الأصلي على ${platform}</a></p>`,
-            type: platform === 'tiktok' ? 'video' : 'social',
+            type: platform === 'tiktok' || platform === 'youtube' ? 'video' : 'social',
             platform: platform,
             mediaUrl: url,
             author: data.author_name || platform,
@@ -75,12 +69,10 @@ export const ExtractorModule = {
       console.error('oEmbed Extract Error:', e);
     }
 
-    // 3. جلب الويب العام في حال لم تكن المنصة مدعومة بـ oEmbed
     try {
       const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
       const data = await res.json();
       const rawHtml = data.contents || '';
-      
       const titleMatch = rawHtml.match(/<title[^>]*>(.*?)<\/title>/i);
       const extractedTitle = titleMatch ? titleMatch[1] : 'مقال ويب';
       const cleanText = rawHtml.replace(/<[^>]*>?/gm, '').trim();
@@ -100,16 +92,16 @@ export const ExtractorModule = {
     }
   },
 
-  // البحث عن مواضيع وأخبار وتفكيك نتائجها
+  // البحث المتقدم وتوليد نتائج واسعة ومتنوعة (تصل إلى 20 نتيجة)
   async searchByText(query) {
     const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ar&gl=YE&ceid=YE:ar`;
-    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`);
+    const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&api_key=421j3805128080201823`);
     const data = await res.json();
 
     if (data.status === 'ok' && data.items && data.items.length > 0) {
-      return data.items.slice(0, 5).map(item => ({
+      return data.items.slice(0, 20).map(item => ({
         title: item.title,
-        summary: item.description ? item.description.replace(/<[^>]*>?/gm, '').substring(0, 180) + '...' : '',
+        summary: item.description ? item.description.replace(/<[^>]*>?/gm, '').substring(0, 200) + '...' : '',
         content: item.content || item.description || '',
         type: 'article',
         platform: 'web',
@@ -119,10 +111,9 @@ export const ExtractorModule = {
         createdAt: item.pubDate || new Date().toISOString(),
       }));
     } else {
-      throw new Error('لم يتم العثور على نتائج لهذا البحث');
+      throw new Error('لم يتم العثور على نتائج للبحث');
     }
   }
 };
 
 export default ExtractorModule;
-
